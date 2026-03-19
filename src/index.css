@@ -1,0 +1,11 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Ajuste para o padding seguro do iPhone/Android na barra inferior */
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 1rem);
+}
+.mb-safe {
+  margin-bottom: env(safe-area-inset-bottom, 1rem);
+}
