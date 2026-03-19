@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   ShoppingCart, List, Plus, Settings, CheckCircle, ChevronLeft, 
   Trash2, Save, CloudOff, Cloud, RefreshCw, Edit2, Search, X,
-  Download, WifiOff, Filter, ChevronDown, ChevronRight
+  Download, WifiOff, Filter, ChevronDown, ChevronRight, ArrowDownAZ
 } from 'lucide-react';
 
 // --- UTILIDADES ---
@@ -543,7 +543,7 @@ function CatalogView({ categories, setCategories, items, setItems, syncData, set
 
 // --- TELA DA LISTA ATIVA (COMPRAS) ---
 function ActiveListView({ list, lists, setLists, categories, items, setItems, syncData, setCurrentView, getLastPurchase }) {
-  const [numpadConfig, setNumpadConfig] = useState(null); // { targetItem, field: 'price' | 'qty' | 'budget' }
+  const [numpadConfig, setNumpadConfig] = useState(null);
   const [isEditingHeader, setIsEditingHeader] = useState(false);
 
   // Novos states para busca e adição de itens
@@ -551,9 +551,10 @@ function ActiveListView({ list, lists, setLists, categories, items, setItems, sy
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [newCategoryPrompt, setNewCategoryPrompt] = useState(false);
 
-  // States para colapsar e filtrar categorias
-  const [collapsedCats, setCollapsedCats] = useState({});
+  // States para colapsar, filtrar e ordenar categorias
+  const [expandedCats, setExpandedCats] = useState({}); // Agora começam vazias (fechadas por padrão)
   const [filterCats, setFilterCats] = useState({});
+  const [sortAlpha, setSortAlpha] = useState({}); // Controle de ordem alfabética
 
   // Sugestões de autocomplete
   const suggestions = items.filter(i => i.name.toLowerCase().includes(searchTerm.toLowerCase()));
@@ -613,10 +614,8 @@ function ActiveListView({ list, lists, setLists, categories, items, setItems, sy
     updateList({ ...list, items: updatedItems });
   };
 
-  // Salva no state e manda pro servidor com um pequeno debounce (ou direto)
   const updateList = (updatedList) => {
     setLists(lists.map(l => l.id === updatedList.id ? updatedList : l));
-    // Sincroniza logo em seguida (num app real usaríamos debounce)
     syncData('SAVE_LIST', updatedList);
   };
 
@@ -771,25 +770,45 @@ function ActiveListView({ list, lists, setLists, categories, items, setItems, sy
           // Calcula o total gasto nesta categoria
           const categoryTotal = listItemsData.reduce((acc, curr) => acc + (curr.price * curr.qty), 0);
 
-          // Lógica de filtro e colapso
-          let displayItems = listItemsData;
+          // Lógica de filtro, ordenação e colapso
+          let displayItems = [...listItemsData]; // Clonamos o array original para não afetar outras ordens
+          
           if (filterCats[cat.id] === 'unbought') {
             displayItems = displayItems.filter(i => i.price === 0);
           }
-          const isCollapsed = collapsedCats[cat.id];
+          
+          // Se o botão de A-Z estiver ativo, ordena por nome
+          if (sortAlpha[cat.id]) {
+            displayItems.sort((a, b) => a.name.localeCompare(b.name));
+          }
+
+          // A categoria só será expandida se estiver explicitamente como true no estado
+          const isExpanded = !!expandedCats[cat.id];
 
           return (
             <div key={cat.id} className="bg-white rounded-2xl shadow-sm border overflow-hidden">
               <div className="p-4 bg-gray-50 border-b">
                 <div className="flex justify-between items-center mb-2">
                   <div 
-                    className="flex items-center gap-2 cursor-pointer active:opacity-70"
-                    onClick={() => setCollapsedCats(prev => ({ ...prev, [cat.id]: !prev[cat.id] }))}
+                    className="flex items-center gap-2 cursor-pointer active:opacity-70 flex-1"
+                    onClick={() => setExpandedCats(prev => ({ ...prev, [cat.id]: !prev[cat.id] }))}
                   >
-                    {isCollapsed ? <ChevronRight size={20} className="text-gray-500" /> : <ChevronDown size={20} className="text-gray-500" />}
-                    <h2 className="font-bold text-gray-700">{cat.name}</h2>
+                    {!isExpanded ? <ChevronRight size={20} className="text-gray-500" /> : <ChevronDown size={20} className="text-gray-500" />}
+                    <h2 className="font-bold text-gray-700 truncate pr-2">{cat.name}</h2>
                   </div>
-                  <div className="flex items-center gap-3">
+                  
+                  {/* Container dos botões e valores */}
+                  <div className="flex items-center gap-2">
+                    {/* Botão de Ordenação Alfabética */}
+                    <button 
+                      onClick={() => setSortAlpha(prev => ({ ...prev, [cat.id]: !prev[cat.id] }))}
+                      className={`p-1.5 rounded-lg flex items-center justify-center transition-colors ${sortAlpha[cat.id] ? 'bg-blue-100 text-blue-700' : 'bg-gray-200 text-gray-500'}`}
+                      title={sortAlpha[cat.id] ? "Remover ordem alfabética" : "Ordenar de A-Z"}
+                    >
+                      <ArrowDownAZ size={16} />
+                    </button>
+
+                    {/* Botão de Filtro */}
                     <button 
                       onClick={() => setFilterCats(prev => ({ ...prev, [cat.id]: prev[cat.id] === 'unbought' ? 'all' : 'unbought' }))}
                       className={`p-1.5 rounded-lg flex items-center justify-center transition-colors ${filterCats[cat.id] === 'unbought' ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-500'}`}
@@ -797,12 +816,13 @@ function ActiveListView({ list, lists, setLists, categories, items, setItems, sy
                     >
                       <Filter size={16} />
                     </button>
-                    <div className="text-right">
+                    
+                    <div className="text-right ml-1">
                       {categoryTotal > 0 && (
                         <div className="text-sm font-bold text-green-700">{formatMoney(categoryTotal)}</div>
                       )}
-                      <div className="text-xs font-medium text-gray-500">
-                        {boughtCount} / {totalCount} itens
+                      <div className="text-xs font-medium text-gray-500 whitespace-nowrap">
+                        {boughtCount} / {totalCount}
                       </div>
                     </div>
                   </div>
@@ -816,7 +836,7 @@ function ActiveListView({ list, lists, setLists, categories, items, setItems, sy
                 </div>
               </div>
 
-              {!isCollapsed && (
+              {isExpanded && (
                 <div className="p-2 space-y-2">
                   {displayItems.length === 0 && filterCats[cat.id] === 'unbought' && (
                     <div className="text-center p-4 text-sm text-green-600 font-medium bg-green-50 rounded-xl">
