@@ -440,7 +440,8 @@ function CatalogView({ categories, setCategories, items, setItems, syncData, set
       <div className="p-4 space-y-6">
         <div className="bg-white p-4 rounded-2xl shadow-sm border">
           <h2 className="font-bold text-gray-700 mb-4">1. Categorias</h2>
-          <div className="flex gap-2 mb-4">
+          {/* ALTERAÇÃO AQUI: flex-col no mobile, flex-row a partir da tela sm */}
+          <div className="flex flex-col sm:flex-row gap-2 mb-4">
             <input 
               type="text" 
               placeholder="Ex: Limpeza, Açougue..." 
@@ -448,7 +449,8 @@ function CatalogView({ categories, setCategories, items, setItems, syncData, set
               value={newCatName}
               onChange={e => setNewCatName(e.target.value)}
             />
-            <button onClick={handleAddCategory} className="bg-gray-800 text-white p-3 rounded-xl font-bold">
+            {/* ALTERAÇÃO AQUI: w-full no mobile, w-auto a partir da tela sm */}
+            <button onClick={handleAddCategory} className="bg-gray-800 text-white p-3 rounded-xl font-bold w-full sm:w-auto">
               Adicionar
             </button>
           </div>
@@ -478,7 +480,8 @@ function CatalogView({ categories, setCategories, items, setItems, syncData, set
                 <option key={cat.id} value={cat.id}>{cat.name}</option>
               ))}
             </select>
-            <div className="flex gap-2">
+            {/* ALTERAÇÃO AQUI: flex-col no mobile, flex-row a partir da tela sm */}
+            <div className="flex flex-col sm:flex-row gap-2">
               <input 
                 type="text" 
                 placeholder="Ex: Arroz 5kg" 
@@ -486,7 +489,8 @@ function CatalogView({ categories, setCategories, items, setItems, syncData, set
                 value={newItemName}
                 onChange={e => setNewItemName(e.target.value)}
               />
-              <button onClick={handleAddItem} className="bg-green-600 text-white p-3 rounded-xl font-bold">
+              {/* ALTERAÇÃO AQUI: w-full no mobile, w-auto a partir da tela sm */}
+              <button onClick={handleAddItem} className="bg-green-600 text-white p-3 rounded-xl font-bold w-full sm:w-auto">
                 Criar Item
               </button>
             </div>
