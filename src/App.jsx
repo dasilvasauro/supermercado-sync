@@ -2,7 +2,8 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   ShoppingCart, List, Plus, Settings, CheckCircle, ChevronLeft, 
   Trash2, Save, CloudOff, Cloud, RefreshCw, Edit2, Search, X,
-  Download, WifiOff, Filter, ChevronDown, ChevronRight, ArrowDownAZ
+  Download, WifiOff, Filter, ChevronDown, ChevronRight, ArrowDownAZ,
+  Maximize2, Delete, ChevronsDownUp
 } from 'lucide-react';
 
 // --- UTILIDADES ---
@@ -15,6 +16,7 @@ const generateId = () => Math.random().toString(36).substr(2, 9);
 // --- COMPONENTE PRINCIPAL ---
 export default function App() {
   const [apiUrl, setApiUrl] = useState(localStorage.getItem('gcart_apiUrl') || '');
+  const [lastApiUrl, setLastApiUrl] = useState(localStorage.getItem('gcart_lastApiUrl') || '');
   const [isSetup, setIsSetup] = useState(!!localStorage.getItem('gcart_apiUrl'));
   const [currentView, setCurrentView] = useState('home'); // home, activeList, catalog
   
@@ -195,11 +197,26 @@ export default function App() {
             value={apiUrl}
             onChange={(e) => setApiUrl(e.target.value)}
           />
+          
+          {lastApiUrl && lastApiUrl !== apiUrl && (
+            <div className="mb-4 text-left w-full animate-in fade-in">
+              <p className="text-xs text-gray-500 font-bold mb-1">Última planilha conectada:</p>
+              <button
+                className="text-sm text-green-700 bg-green-50 p-3 rounded-xl border border-green-200 w-full text-left truncate active:bg-green-100 transition-colors"
+                onClick={() => setApiUrl(lastApiUrl)}
+              >
+                {lastApiUrl}
+              </button>
+            </div>
+          )}
+
           <button 
             className="w-full bg-green-600 text-white font-bold p-4 rounded-xl shadow-lg active:bg-green-700"
             onClick={() => {
               if (apiUrl.trim().length > 10) {
                 localStorage.setItem('gcart_apiUrl', apiUrl);
+                localStorage.setItem('gcart_lastApiUrl', apiUrl);
+                setLastApiUrl(apiUrl);
                 setIsSetup(true);
               }
             }}
@@ -440,7 +457,6 @@ function CatalogView({ categories, setCategories, items, setItems, syncData, set
       <div className="p-4 space-y-6">
         <div className="bg-white p-4 rounded-2xl shadow-sm border">
           <h2 className="font-bold text-gray-700 mb-4">1. Categorias</h2>
-          {/* ALTERAÇÃO AQUI: flex-col no mobile, flex-row a partir da tela sm */}
           <div className="flex flex-col sm:flex-row gap-2 mb-4">
             <input 
               type="text" 
@@ -449,7 +465,6 @@ function CatalogView({ categories, setCategories, items, setItems, syncData, set
               value={newCatName}
               onChange={e => setNewCatName(e.target.value)}
             />
-            {/* ALTERAÇÃO AQUI: w-full no mobile, w-auto a partir da tela sm */}
             <button onClick={handleAddCategory} className="bg-gray-800 text-white p-3 rounded-xl font-bold w-full sm:w-auto">
               Adicionar
             </button>
@@ -480,7 +495,6 @@ function CatalogView({ categories, setCategories, items, setItems, syncData, set
                 <option key={cat.id} value={cat.id}>{cat.name}</option>
               ))}
             </select>
-            {/* ALTERAÇÃO AQUI: flex-col no mobile, flex-row a partir da tela sm */}
             <div className="flex flex-col sm:flex-row gap-2">
               <input 
                 type="text" 
@@ -489,7 +503,6 @@ function CatalogView({ categories, setCategories, items, setItems, syncData, set
                 value={newItemName}
                 onChange={e => setNewItemName(e.target.value)}
               />
-              {/* ALTERAÇÃO AQUI: w-full no mobile, w-auto a partir da tela sm */}
               <button onClick={handleAddItem} className="bg-green-600 text-white p-3 rounded-xl font-bold w-full sm:w-auto">
                 Criar Item
               </button>
@@ -552,9 +565,16 @@ function ActiveListView({ list, lists, setLists, categories, items, setItems, sy
   const [newCategoryPrompt, setNewCategoryPrompt] = useState(false);
 
   // States para colapsar, filtrar e ordenar categorias
-  const [expandedCats, setExpandedCats] = useState({}); // Agora começam vazias (fechadas por padrão)
+  const [expandedCats, setExpandedCats] = useState({});
   const [filterCats, setFilterCats] = useState({});
-  const [sortAlpha, setSortAlpha] = useState({}); // Controle de ordem alfabética
+  const [sortAlpha, setSortAlpha] = useState({});
+
+  // Modo de visualização por seção (Fullscreen view mode)
+  const [focusCatIndex, setFocusCatIndex] = useState(null);
+  const isFocusMode = focusCatIndex !== null;
+
+  // Verifica se há alguma categoria expandida
+  const hasExpandedCats = Object.values(expandedCats).some(v => v === true);
 
   // Sugestões de autocomplete
   const suggestions = items.filter(i => i.name.toLowerCase().includes(searchTerm.toLowerCase()));
@@ -593,20 +613,17 @@ function ActiveListView({ list, lists, setLists, categories, items, setItems, sy
   const totalSpent = (list.items || []).reduce((acc, curr) => acc + (curr.price * curr.qty), 0);
   const balance = list.budget - totalSpent;
 
-  // Atualiza um campo da lista principal (nome, mercado, budget)
   const updateListMeta = (field, value) => {
     const updated = { ...list, [field]: value };
     updateList(updated);
   };
 
-  // Atualiza um item da lista
   const updateItemValue = (itemId, field, value) => {
     const updatedItems = list.items.map(i => {
       if (i.itemId === itemId) return { ...i, [field]: value };
       return i;
     });
     
-    // Se o item não existia na lista ainda (foi adicionado ao catálogo depois da lista criada), adiciona agora
     if (!updatedItems.find(i => i.itemId === itemId)) {
       updatedItems.push({ itemId, price: field === 'price' ? value : 0, qty: field === 'qty' ? value : 1 });
     }
@@ -644,7 +661,7 @@ function ActiveListView({ list, lists, setLists, categories, items, setItems, sy
         </button>
       </div>
 
-      {/* Editor de Cabeçalho Modal (Simples) */}
+      {/* Editor de Cabeçalho Modal */}
       {isEditingHeader && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white p-6 rounded-2xl w-full max-w-sm space-y-4">
@@ -662,7 +679,7 @@ function ActiveListView({ list, lists, setLists, categories, items, setItems, sy
         </div>
       )}
 
-      {/* Barra de Adicionar Item */}
+      {/* Barra de Adicionar Item (Esconde visualmente os extras no modo foco, mas mantem a barra) */}
       <div className="bg-white p-4 shadow-sm border-b relative z-20">
         <div className="relative">
           <input
@@ -678,6 +695,20 @@ function ActiveListView({ list, lists, setLists, categories, items, setItems, sy
             onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
           />
           <Search className="absolute left-3 top-3.5 text-gray-400" size={20} />
+        </div>
+
+        {/* Linha de utilidades extras (itens e colapsar) */}
+        <div className="flex justify-between items-center mt-3 px-1">
+          <span className="text-sm text-gray-500 font-medium">{list.items?.length || 0} itens na lista</span>
+          
+          {hasExpandedCats && !isFocusMode && (
+             <button 
+               onClick={() => setExpandedCats({})} 
+               className="flex items-center gap-1 text-sm text-blue-600 font-medium bg-blue-50 px-3 py-1.5 rounded-lg active:bg-blue-100 transition-colors"
+             >
+               <ChevronsDownUp size={16} /> Colapsar Tudo
+             </button>
+          )}
         </div>
 
         {showSuggestions && searchTerm.trim().length > 0 && (
@@ -742,14 +773,47 @@ function ActiveListView({ list, lists, setLists, categories, items, setItems, sy
 
       {/* Corpo da Lista - Agrupado por Categoria */}
       <div className="p-4 space-y-6">
+        
         {(!list.items || list.items.length === 0) && (
            <div className="text-center p-8 text-gray-400 bg-white rounded-2xl border border-dashed border-gray-300">
              Lista vazia. Busque ou adicione itens usando o campo acima!
            </div>
         )}
 
-        {categories.map(cat => {
-          // Filtra apenas os itens que estão NESTA lista E pertencem a ESTA categoria
+        {/* Navegador de Foco (Apenas no Modo Foco) */}
+        {isFocusMode && (
+          <div className="flex items-center justify-between bg-white p-3 rounded-2xl shadow-sm border border-green-200 mb-2 sticky top-16 z-10 animate-in fade-in">
+            <button 
+              onClick={() => {
+                const prev = focusCatIndex > 0 ? focusCatIndex - 1 : categories.length - 1;
+                setFocusCatIndex(prev);
+                setExpandedCats(prevCats => ({ ...prevCats, [categories[prev].id]: true }));
+              }}
+              className="p-2 text-green-600 bg-green-50 rounded-xl active:bg-green-100"
+            >
+              <ChevronLeft size={24}/>
+            </button>
+            <div className="text-center">
+              <span className="text-xs text-green-600 uppercase font-bold tracking-wider">Modo Foco</span>
+              <div className="font-bold text-gray-800 text-lg">{categories[focusCatIndex]?.name}</div>
+            </div>
+            <button 
+              onClick={() => {
+                const next = focusCatIndex < categories.length - 1 ? focusCatIndex + 1 : 0;
+                setFocusCatIndex(next);
+                setExpandedCats(prevCats => ({ ...prevCats, [categories[next].id]: true }));
+              }}
+              className="p-2 text-green-600 bg-green-50 rounded-xl active:bg-green-100"
+            >
+              <ChevronRight size={24}/>
+            </button>
+          </div>
+        )}
+
+        {categories.map((cat, index) => {
+          // No modo de foco, ignora a renderização das categorias que não são a selecionada
+          if (isFocusMode && focusCatIndex !== index) return null;
+
           const listItemsData = (list.items || [])
             .map(listItem => {
               const baseItem = items.find(i => i.id === listItem.itemId);
@@ -757,36 +821,29 @@ function ActiveListView({ list, lists, setLists, categories, items, setItems, sy
             })
             .filter(item => item && item.categoryId === cat.id);
 
-          if (listItemsData.length === 0) return null;
+          if (listItemsData.length === 0 && !isFocusMode) return null;
 
-          // Calcula progresso da categoria
           const boughtCount = listItemsData.filter(i => i.price > 0).length;
           const totalCount = listItemsData.length;
           const progressPercent = totalCount === 0 ? 0 : (boughtCount / totalCount) * 100;
 
-          // Calcula o preço máximo para exibir a coroa
           const maxItemPrice = Math.max(0, ...listItemsData.filter(i => i.price > 0).map(i => i.price));
-
-          // Calcula o total gasto nesta categoria
           const categoryTotal = listItemsData.reduce((acc, curr) => acc + (curr.price * curr.qty), 0);
 
-          // Lógica de filtro, ordenação e colapso
-          let displayItems = [...listItemsData]; // Clonamos o array original para não afetar outras ordens
+          let displayItems = [...listItemsData];
           
           if (filterCats[cat.id] === 'unbought') {
             displayItems = displayItems.filter(i => i.price === 0);
           }
           
-          // Se o botão de A-Z estiver ativo, ordena por nome
           if (sortAlpha[cat.id]) {
             displayItems.sort((a, b) => a.name.localeCompare(b.name));
           }
 
-          // A categoria só será expandida se estiver explicitamente como true no estado
           const isExpanded = !!expandedCats[cat.id];
 
           return (
-            <div key={cat.id} className="bg-white rounded-2xl shadow-sm border overflow-hidden">
+            <div key={cat.id} className={`bg-white rounded-2xl shadow-sm border overflow-hidden ${isFocusMode ? 'border-green-200' : ''}`}>
               <div className="p-4 bg-gray-50 border-b">
                 <div className="flex justify-between items-center mb-2">
                   <div 
@@ -797,26 +854,48 @@ function ActiveListView({ list, lists, setLists, categories, items, setItems, sy
                     <h2 className="font-bold text-gray-700 truncate pr-2">{cat.name}</h2>
                   </div>
                   
-                  {/* Container dos botões e valores */}
                   <div className="flex items-center gap-2">
-                    {/* Botão de Ordenação Alfabética */}
+                    {/* Botões Utilitários */}
                     <button 
                       onClick={() => setSortAlpha(prev => ({ ...prev, [cat.id]: !prev[cat.id] }))}
-                      className={`p-1.5 rounded-lg flex items-center justify-center transition-colors ${sortAlpha[cat.id] ? 'bg-blue-100 text-blue-700' : 'bg-gray-200 text-gray-500'}`}
-                      title={sortAlpha[cat.id] ? "Remover ordem alfabética" : "Ordenar de A-Z"}
+                      className={`p-1.5 rounded-lg flex items-center justify-center transition-colors ${sortAlpha[cat.id] ? 'bg-blue-100 text-blue-700' : 'bg-gray-200 text-gray-500 hover:bg-gray-300'}`}
                     >
                       <ArrowDownAZ size={16} />
                     </button>
 
-                    {/* Botão de Filtro */}
                     <button 
                       onClick={() => setFilterCats(prev => ({ ...prev, [cat.id]: prev[cat.id] === 'unbought' ? 'all' : 'unbought' }))}
-                      className={`p-1.5 rounded-lg flex items-center justify-center transition-colors ${filterCats[cat.id] === 'unbought' ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-500'}`}
-                      title={filterCats[cat.id] === 'unbought' ? "Mostrar todos" : "Mostrar apenas não comprados"}
+                      className={`p-1.5 rounded-lg flex items-center justify-center transition-colors ${filterCats[cat.id] === 'unbought' ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-500 hover:bg-gray-300'}`}
                     >
                       <Filter size={16} />
                     </button>
                     
+                    {/* Botão de Modo Foco */}
+                    {!isFocusMode ? (
+                      <button 
+                        onClick={(e) => { 
+                          e.stopPropagation(); 
+                          setFocusCatIndex(index);
+                          setExpandedCats(prev => ({...prev, [cat.id]: true}));
+                        }}
+                        className="p-1.5 rounded-lg flex items-center justify-center transition-colors bg-gray-200 text-gray-500 hover:bg-gray-300"
+                        title="Visualizar em Tela Cheia"
+                      >
+                        <Maximize2 size={16} />
+                      </button>
+                    ) : (
+                      <button 
+                        onClick={(e) => { 
+                          e.stopPropagation(); 
+                          setFocusCatIndex(null);
+                        }}
+                        className="p-1.5 rounded-lg flex items-center justify-center transition-colors bg-red-100 text-red-600 hover:bg-red-200"
+                        title="Sair do Modo Foco"
+                      >
+                        <X size={16} />
+                      </button>
+                    )}
+
                     <div className="text-right ml-1">
                       {categoryTotal > 0 && (
                         <div className="text-sm font-bold text-green-700">{formatMoney(categoryTotal)}</div>
@@ -838,11 +917,17 @@ function ActiveListView({ list, lists, setLists, categories, items, setItems, sy
 
               {isExpanded && (
                 <div className="p-2 space-y-2">
-                  {displayItems.length === 0 && filterCats[cat.id] === 'unbought' && (
+                  {displayItems.length === 0 && filterCats[cat.id] === 'unbought' && totalCount > 0 && (
                     <div className="text-center p-4 text-sm text-green-600 font-medium bg-green-50 rounded-xl">
                       Todos os itens desta categoria foram comprados! 🎉
                     </div>
                   )}
+                  {displayItems.length === 0 && totalCount === 0 && (
+                     <div className="text-center p-4 text-sm text-gray-400">
+                        Categoria vazia na lista.
+                     </div>
+                  )}
+
                   {displayItems.map(item => {
                     const lastPurchase = getLastPurchase(item.id, list.id);
                     const lastPrice = lastPurchase ? lastPurchase.price : 0;
@@ -918,7 +1003,7 @@ function ActiveListView({ list, lists, setLists, categories, items, setItems, sy
       </div>
 
       {/* Barra de Totais Fixa no Rodapé */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t shadow-[0_-4px_20px_rgba(0,0,0,0.05)] p-4 pb-safe z-20">
+      <div className="fixed bottom-0 left-0 right-0 bg-white border-t shadow-[0_-4px_20px_rgba(0,0,0,0.05)] p-4 pb-safe z-30">
         <div className="flex justify-between items-center mb-3">
           <div className="flex-1" onClick={() => setNumpadConfig({ field: 'budget', currentValue: list.budget })}>
             <div className="text-xs text-gray-500 font-medium">Saldo / Orçamento <Edit2 size={10} className="inline ml-1"/></div>
@@ -954,19 +1039,20 @@ function ActiveListView({ list, lists, setLists, categories, items, setItems, sy
   );
 }
 
-// --- TECLADO CUSTOMIZADO PARA UMA MÃO ---
+// --- TECLADO CUSTOMIZADO PARA UMA MÃO E COMPUTADOR ---
 function NumpadModal({ config, onClose, onConfirm, itemName }) {
   const isMoney = config.field === 'price' || config.field === 'budget';
   const initialStr = config.currentValue ? config.currentValue.toString().replace('.', ',') : '';
   const [valueStr, setValueStr] = useState(initialStr === '0' ? '' : initialStr);
 
   const handlePress = (key) => {
-    if (key === 'BACK') {
+    if (key === 'CLEAR') {
+      setValueStr('');
+    } else if (key === 'BACKSPACE') {
       setValueStr(prev => prev.slice(0, -1));
     } else if (key === ',') {
       if (!valueStr.includes(',')) setValueStr(prev => (prev || '0') + ',');
     } else {
-      // Limita tamanho para não estourar layout
       if (valueStr.length < 10) setValueStr(prev => prev + key);
     }
   };
@@ -976,24 +1062,39 @@ function NumpadModal({ config, onClose, onConfirm, itemName }) {
     onConfirm(finalVal);
   };
 
-  // Botões do teclado arranjados para ergonomia de uma mão
+  // Suporte a teclado físico de computador
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key >= '0' && e.key <= '9') {
+        handlePress(e.key);
+      } else if (e.key === ',' || e.key === '.') {
+        handlePress(',');
+      } else if (e.key === 'Backspace') {
+        handlePress('BACKSPACE');
+      } else if (e.key === 'Delete') {
+        handlePress('CLEAR');
+      } else if (e.key === 'Enter') {
+        confirm();
+      } else if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [valueStr]);
+
   const keys = [
     '1', '2', '3',
     '4', '5', '6',
     '7', '8', '9',
-    isMoney ? ',' : '', '0', 'BACK'
+    isMoney ? ',' : '', '0', 'CLEAR'
   ];
 
-  // Visualização formatada em tempo real no display
-  let displayValue = valueStr;
-  if (!displayValue) displayValue = '0';
-  if (isMoney) {
-     // Apenas para mostrar o 'R$' de forma bonita
-     displayValue = `R$ ${displayValue}`;
-  }
+  let displayValue = valueStr || '0';
+  if (isMoney) displayValue = `R$ ${displayValue}`;
 
   return (
-    <div className="fixed inset-0 bg-black/60 z-50 flex flex-col justify-end animate-in fade-in duration-200">
+    <div className="fixed inset-0 bg-black/60 z-[60] flex flex-col justify-end animate-in fade-in duration-200">
       <div className="flex-1" onClick={onClose}></div>
       <div className="bg-white rounded-t-3xl shadow-2xl p-4 animate-in slide-in-from-bottom-full duration-300">
         
@@ -1004,17 +1105,29 @@ function NumpadModal({ config, onClose, onConfirm, itemName }) {
           </span>
         </div>
 
-        <div className="bg-gray-100 p-4 rounded-2xl mb-4 text-right">
-          <span className="text-4xl font-bold text-gray-800 tracking-tight">
+        <div className="bg-gray-100 p-4 rounded-2xl mb-4 flex justify-between items-center overflow-hidden">
+          <span className="text-4xl font-bold text-gray-800 tracking-tight truncate pr-2">
             {displayValue}
           </span>
+          <button 
+            onClick={() => handlePress('BACKSPACE')}
+            className="p-3 text-red-500 bg-white shadow-sm rounded-xl active:bg-gray-200 flex-shrink-0"
+            title="Apagar um caractere (Backspace)"
+          >
+            <Delete size={28} />
+          </button>
         </div>
 
         <div className="grid grid-cols-3 gap-3 mb-4">
           {keys.map((key, i) => {
             if (key === '') return <div key={i} />;
-            if (key === 'BACK') return (
-              <button key={i} onClick={() => handlePress(key)} className="bg-gray-100 p-4 rounded-2xl text-2xl font-bold text-red-500 active:bg-gray-200 flex justify-center items-center touch-manipulation">
+            if (key === 'CLEAR') return (
+              <button 
+                key={i} 
+                onClick={() => handlePress(key)} 
+                className="bg-gray-100 p-4 rounded-2xl text-2xl font-bold text-red-500 active:bg-gray-200 flex justify-center items-center touch-manipulation"
+                title="Limpar tudo"
+              >
                 <Trash2 size={24} />
               </button>
             );
@@ -1045,7 +1158,7 @@ function NumpadModal({ config, onClose, onConfirm, itemName }) {
 function ConfirmModal({ isOpen, title, message, confirmText, cancelText, onConfirm, onCancel, isDanger }) {
   if (!isOpen) return null;
   return (
-    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 bg-black/60 z-[70] flex items-center justify-center p-4">
       <div className="bg-white p-6 rounded-2xl w-full max-w-sm space-y-4 animate-in fade-in zoom-in-95 duration-200">
         <h2 className="font-bold text-lg text-gray-800">{title}</h2>
         <p className="text-sm text-gray-600">{message}</p>
